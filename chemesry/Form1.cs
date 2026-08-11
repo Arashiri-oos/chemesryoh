@@ -2,11 +2,27 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using System.ComponentModel;
 
 namespace chemesry
 {
     public partial class Form1 : Form
     {
+        private int _myValue;
+
+        // Создаем свойство со скрытием от дизайнера, чтобы не было ошибки WFO1000
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public int MyValue
+        {
+            get { return _myValue; }
+            set
+            {
+                _myValue = value;
+                // Обновляем текст на экране при каждом изменении переменной
+                label1.Text = _myValue.ToString();
+            }
+        }
+
         // Список всех активных элементов на экране
         private List<VisualElement> activeElements = new List<VisualElement>();
 
@@ -22,6 +38,8 @@ namespace chemesry
 
             // Включаем двойную буферизацию
             this.DoubleBuffered = true;
+
+            MyValue = 0;
 
             // ИСПРАВЛЕНО: Явное указание при создании объекта таймера
             physicsTimer = new System.Windows.Forms.Timer();
@@ -40,6 +58,9 @@ namespace chemesry
 
             // Событие клика по форме для спавна
             this.MouseClick += Form1_MouseClick;
+
+            button11.Click += MyButtonAction_Click;
+
         }
 
         // --- МЕТОДЫ, КОТОРЫХ НЕ ХВАТАЛО НА СКРИНШОТЕ ---
@@ -51,15 +72,37 @@ namespace chemesry
             this.Text = $"Выбран: {selectedElementToPlace}. Кликните по экрану для создания.";
         }
 
+       
+        
+
         private void Form1_MouseClick(object sender, MouseEventArgs e)
         {
+            
             if (selectedElementToPlace != null && Element.Database.ContainsKey(selectedElementToPlace))
             {
+                
                 Element baseEl = Element.Database[selectedElementToPlace];
                 activeElements.Add(new VisualElement(baseEl, e.X, e.Y));
                 this.Invalidate();
+
+                MyValue++;
+
             }
         }
+
+        private void MyButtonAction_Click(object sender, EventArgs e)
+        {
+          
+           
+
+            activeElements.Clear();
+            MyValue = 0;
+            selectedElementToPlace = null; // Сбрасываем выбор элемента
+            this.Invalidate();
+        }
+
+
+
 
         private void PhysicsTimer_Tick(object sender, EventArgs e)
         {
@@ -167,5 +210,7 @@ namespace chemesry
                 el.Draw(e.Graphics);
             }
         }
+
+       
     }
 }
