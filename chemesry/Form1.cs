@@ -63,9 +63,9 @@ namespace chemesry
         {
             InitializeComponent();
 
-            this.FormBorderStyle = FormBorderStyle.FixedSingle;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
+            //this.FormBorderStyle = FormBorderStyle.FixedSingle;
+            // this.MaximizeBox = false;
+            //  this.MinimizeBox = false;
             this.DoubleBuffered = true;
 
             MyValue = 0;
@@ -430,6 +430,11 @@ namespace chemesry
         }
 
         private void Form1_Load(object sender, EventArgs e) { }
+
+        private void label2_Click(object sender, EventArgs e)
+        {
+
+        }
     }
 
     public class SpatialGrid

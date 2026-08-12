@@ -166,6 +166,7 @@
             // 
             // buttondefspeed
             // 
+            buttondefspeed.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             buttondefspeed.Location = new Point(1369, 9);
             buttondefspeed.Name = "buttondefspeed";
             buttondefspeed.Size = new Size(40, 40);
@@ -175,6 +176,7 @@
             // 
             // button2xspeed
             // 
+            button2xspeed.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             button2xspeed.Location = new Point(1412, 9);
             button2xspeed.Name = "button2xspeed";
             button2xspeed.Size = new Size(40, 40);
@@ -184,6 +186,7 @@
             // 
             // buttonstopspeed
             // 
+            buttonstopspeed.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             buttonstopspeed.Location = new Point(1323, 9);
             buttonstopspeed.Name = "buttonstopspeed";
             buttonstopspeed.Size = new Size(40, 40);
@@ -193,12 +196,14 @@
             // 
             // label2
             // 
+            label2.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             label2.AutoSize = true;
-            label2.Location = new Point(1369, 52);
+            label2.Location = new Point(1368, 52);
             label2.Name = "label2";
             label2.Size = new Size(38, 15);
             label2.TabIndex = 6;
             label2.Text = "label2";
+            label2.Click += label2_Click;
             // 
             // buttonDelete
             // 
