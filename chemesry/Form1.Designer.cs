@@ -34,6 +34,7 @@
             button2xspeed = new Button();
             buttonstopspeed = new Button();
             label2 = new Label();
+            buttonDelete = new Button();
             panel1.SuspendLayout();
             SuspendLayout();
             // 
@@ -199,11 +200,21 @@
             label2.TabIndex = 6;
             label2.Text = "label2";
             // 
+            // buttonDelete
+            // 
+            buttonDelete.Location = new Point(1, 137);
+            buttonDelete.Name = "buttonDelete";
+            buttonDelete.Size = new Size(75, 58);
+            buttonDelete.TabIndex = 7;
+            buttonDelete.Text = "удалить 1 елемент";
+            buttonDelete.UseVisualStyleBackColor = true;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1452, 651);
+            Controls.Add(buttonDelete);
             Controls.Add(label2);
             Controls.Add(buttonstopspeed);
             Controls.Add(button2xspeed);
@@ -238,5 +249,6 @@
         private Button button2xspeed;
         private Button buttonstopspeed;
         private Label label2;
+        private Button buttonDelete;
     }
 }

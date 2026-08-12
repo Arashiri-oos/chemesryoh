@@ -9,6 +9,15 @@ namespace chemesry
 {
     public partial class Form1 : Form
     {
+        // Режим удаления активен или нет
+        private bool isDeleteMode = false;
+
+        private void buttonDelete_Click(object sender, EventArgs e)
+        {
+            isDeleteMode = true;
+            selectedElementToPlace = null; // Сбрасываем выбор элемента для спавна
+            this.Text = "Режим удаления: кликните по атому, чтобы стереть его.";
+        }
         int b = 1;
         private int _myValue;
         private string _myValuespeed;
@@ -115,6 +124,7 @@ namespace chemesry
             buttondefspeed.Click += defspeed;
             button2xspeed.Click += x_speed;
             this.MouseWheel += Form1_MouseWheel;
+            buttonDelete.Click += buttonDelete_Click;
 
             // Событие клика по форме для спавна
             // Подписываемся на новые события мыши (кликать, тащить, отпускать)
@@ -133,6 +143,7 @@ namespace chemesry
         {
             Button clickedButton = sender as Button;
             selectedElementToPlace = clickedButton.Text;
+            isDeleteMode = false;
             this.Text = $"Выбран: {selectedElementToPlace}. Кликните по экрану для создания.";
         }
 
@@ -152,23 +163,58 @@ namespace chemesry
             // ЛЕВАЯ КНОПКА: Работаем с атомами
             if (e.Button == MouseButtons.Left)
             {
-                // Переводим пиксель клика в реальную координату мира
                 PointF worldPos = ScreenToWorld(e.X, e.Y);
 
+                // Ищем атом, по которому кликнули
+                VisualElement clickedElement = null;
                 foreach (var el in activeElements)
                 {
                     float dx = worldPos.X - el.X;
                     float dy = worldPos.Y - el.Y;
                     if (dx * dx + dy * dy <= el.Radius * el.Radius)
                     {
-                        draggedElement = el;
-                        draggedElement.VX = 0;
-                        draggedElement.VY = 0;
-                        return;
+                        clickedElement = el;
+                        break;
                     }
                 }
 
-                // Спавн нового атома (по координатам мира, а не экрана)
+                // --- РЕЖИМ УДАЛЕНИЯ ---
+                if (isDeleteMode && clickedElement != null)
+                {
+                    // 1. Удаляем этот элемент из списков связей всех остальных атомов
+                    foreach (var el in activeElements)
+                    {
+                        if (el.Bonds.Contains(clickedElement))
+                        {
+                            el.Bonds.Remove(clickedElement);
+                        }
+                    }
+
+                    // 2. Удаляем сам элемент из главного списка
+                    activeElements.Remove(clickedElement);
+
+                    // 3. Если мы его тащили, сбрасываем захват
+                    if (draggedElement == clickedElement)
+                    {
+                        draggedElement = null;
+                    }
+
+                    // 4. Обновляем счетчик и экран
+                    MyValue = activeElements.Count;
+                    this.Invalidate();
+                    return;
+                }
+
+                // Обычный захват для перетаскивания
+                if (clickedElement != null)
+                {
+                    draggedElement = clickedElement;
+                    draggedElement.VX = 0;
+                    draggedElement.VY = 0;
+                    return;
+                }
+
+                // Спавн нового атома
                 if (selectedElementToPlace != null && Element.Database.ContainsKey(selectedElementToPlace))
                 {
                     Element baseEl = Element.Database[selectedElementToPlace];
