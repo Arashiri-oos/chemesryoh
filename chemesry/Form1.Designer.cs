@@ -30,6 +30,10 @@
             button1 = new Button();
             label1 = new Label();
             button11 = new Button();
+            buttondefspeed = new Button();
+            button2xspeed = new Button();
+            buttonstopspeed = new Button();
+            label2 = new Label();
             panel1.SuspendLayout();
             SuspendLayout();
             // 
@@ -46,9 +50,9 @@
             panel1.Controls.Add(button2);
             panel1.Controls.Add(button1);
             panel1.Dock = DockStyle.Bottom;
-            panel1.Location = new Point(0, 386);
+            panel1.Location = new Point(0, 587);
             panel1.Name = "panel1";
-            panel1.Size = new Size(800, 64);
+            panel1.Size = new Size(1452, 64);
             panel1.TabIndex = 0;
             // 
             // button10
@@ -159,16 +163,57 @@
             button11.Text = "удулить всё нахуй";
             button11.UseVisualStyleBackColor = true;
             // 
+            // buttondefspeed
+            // 
+            buttondefspeed.Location = new Point(1369, 9);
+            buttondefspeed.Name = "buttondefspeed";
+            buttondefspeed.Size = new Size(40, 40);
+            buttondefspeed.TabIndex = 3;
+            buttondefspeed.Text = "▶";
+            buttondefspeed.UseVisualStyleBackColor = true;
+            // 
+            // button2xspeed
+            // 
+            button2xspeed.Location = new Point(1412, 9);
+            button2xspeed.Name = "button2xspeed";
+            button2xspeed.Size = new Size(40, 40);
+            button2xspeed.TabIndex = 4;
+            button2xspeed.Text = "▶»";
+            button2xspeed.UseVisualStyleBackColor = true;
+            // 
+            // buttonstopspeed
+            // 
+            buttonstopspeed.Location = new Point(1323, 9);
+            buttonstopspeed.Name = "buttonstopspeed";
+            buttonstopspeed.Size = new Size(40, 40);
+            buttonstopspeed.TabIndex = 5;
+            buttonstopspeed.Text = "■";
+            buttonstopspeed.UseVisualStyleBackColor = true;
+            // 
+            // label2
+            // 
+            label2.AutoSize = true;
+            label2.Location = new Point(1369, 52);
+            label2.Name = "label2";
+            label2.Size = new Size(38, 15);
+            label2.TabIndex = 6;
+            label2.Text = "label2";
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(800, 450);
+            ClientSize = new Size(1452, 651);
+            Controls.Add(label2);
+            Controls.Add(buttonstopspeed);
+            Controls.Add(button2xspeed);
+            Controls.Add(buttondefspeed);
             Controls.Add(button11);
             Controls.Add(label1);
             Controls.Add(panel1);
             Name = "Form1";
             Text = "Chemistry Simulator";
+            Load += Form1_Load;
             panel1.ResumeLayout(false);
             ResumeLayout(false);
             PerformLayout();
@@ -189,5 +234,9 @@
         private System.Windows.Forms.Button button10;
         private Label label1;
         private Button button11;
+        private Button buttondefspeed;
+        private Button button2xspeed;
+        private Button buttonstopspeed;
+        private Label label2;
     }
 }

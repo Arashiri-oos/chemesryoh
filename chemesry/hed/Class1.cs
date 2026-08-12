@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using static chemesry.Form1;
 
 namespace chemesry
 {
@@ -51,11 +52,13 @@ namespace chemesry
         public int FramesAlive { get; set; } = 0;
 
         // Физика (координаты и скорость)
-        public float X { get; set; }
+        public float X { get; set; } 
         public float Y { get; set; }
         public float VX { get; set; } // Скорость по оси X
         public float VY { get; set; } // Скорость по оси Y
         public float Radius { get; set; } = 20f; // Размер кружочка
+        
+        
 
         // Зачаток для связей
         public List<VisualElement> Bonds { get; set; } = new List<VisualElement>();
@@ -66,9 +69,13 @@ namespace chemesry
             X = x;
             Y = y;
 
+           
+
+
+
             // Задаем случайную начальную скорость
             System.Random rnd = new System.Random();
-            VX = (float)(rnd.NextDouble() * 4 - 2); // от -2 до +2
+            VX = (float)(rnd.NextDouble() * 4 - 2);
             VY = (float)(rnd.NextDouble() * 4 - 2);
         }
 
