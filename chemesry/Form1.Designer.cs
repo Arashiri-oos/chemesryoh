@@ -161,7 +161,7 @@
             button11.Name = "button11";
             button11.Size = new Size(85, 89);
             button11.TabIndex = 2;
-            button11.Text = "удулить всё нахуй";
+            button11.Text = "удалить всё нахуй";
             button11.UseVisualStyleBackColor = true;
             // 
             // buttondefspeed

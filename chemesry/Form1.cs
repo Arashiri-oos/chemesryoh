@@ -8,6 +8,10 @@ namespace chemesry
 {
     public partial class Form1 : Form
     {
+        private bool isDragging = false;
+        private VisualElemen selectedElement = null; // Замените Element на имя вашего класса атома/круга
+        private PointF dragOffset;
+
         private SpatialGrid spatialGrid = new SpatialGrid(100f);
         private List<VisualElement> nearbyBuffer = new List<VisualElement>(); // Буфер для оптимизации GC
 
@@ -178,9 +182,9 @@ namespace chemesry
                 }
 
                 // Спавн атома
-                if (selectedElementToPlace != null && Element.Database.ContainsKey(selectedElementToPlace))
+                if (selectedElementToPlace != null && VisualElemen.Database.ContainsKey(selectedElementToPlace))
                 {
-                    Element baseEl = Element.Database[selectedElementToPlace];
+                    VisualElemen baseEl = VisualElemen.Database[selectedElementToPlace];
                     activeElements.Add(new VisualElement(baseEl, worldPos.X, worldPos.Y));
                     MyValue = activeElements.Count;
                     this.Invalidate();
@@ -260,6 +264,9 @@ namespace chemesry
                 {
                     foreach (var el in activeElements)
                     {
+
+                        if (isDragging && el.Equals(selectedElement))
+                            continue;
                         el.FramesAlive++;
 
                         if (el.FramesAlive > 60)
