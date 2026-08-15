@@ -3,17 +3,25 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.Windows.Forms;
+using System.IO;
+using System.Text.Json;
 
 namespace chemesry
 {
     public partial class Form1 : Form
     {
+        // Переменные для перетаскивания
         private bool isDragging = false;
-        private VisualElemen selectedElement = null; // Замените Element на имя вашего класса атома/круга
-        private PointF dragOffset;
+        private List<VisualElement> draggedMolecule = new List<VisualElement>();
+        private VisualElement draggedAtom = null;
+        private PointF lastMousePos;
+
+        // Переменные для двойного клика
+        private System.Windows.Forms.Timer doubleClickTimer;
+        private bool isDoubleClick = false;
 
         private SpatialGrid spatialGrid = new SpatialGrid(100f);
-        private List<VisualElement> nearbyBuffer = new List<VisualElement>(); // Буфер для оптимизации GC
+        private List<VisualElement> nearbyBuffer = new List<VisualElement>();
 
         private bool isDeleteMode = false;
 
@@ -26,10 +34,8 @@ namespace chemesry
         private float cameraOffsetY = 0f;
         private float zoom = 1.0f;
 
-        // Перетаскивание
+        // Перетаскивание камеры (панорамирование)
         private bool isPanning = false;
-        private Point lastMousePos;
-        private VisualElement draggedElement = null;
 
         // Границы мира
         private int arenaWidth = 3000;
@@ -67,10 +73,17 @@ namespace chemesry
         {
             InitializeComponent();
 
-            //this.FormBorderStyle = FormBorderStyle.FixedSingle;
-            // this.MaximizeBox = false;
-            //  this.MinimizeBox = false;
             this.DoubleBuffered = true;
+
+            // Разрешаем Drag & Drop файлов в окно
+            this.AllowDrop = true;
+            this.DragEnter += Form1_DragEnter;
+            this.DragDrop += Form1_DragDrop;
+
+            // Настройка таймера для двойного клика (берем системное время Windows, обычно ~500мс)
+            doubleClickTimer = new System.Windows.Forms.Timer();
+            doubleClickTimer.Interval = SystemInformation.DoubleClickTime;
+            doubleClickTimer.Tick += DoubleClickTimer_Tick;
 
             MyValue = 0;
             MyValuespeed = "stop";
@@ -104,6 +117,12 @@ namespace chemesry
             this.MouseUp += Form1_MouseUp;
         }
 
+        private void DoubleClickTimer_Tick(object sender, EventArgs e)
+        {
+            doubleClickTimer.Stop();
+            isDoubleClick = false; // Время на двойной клик истекло
+        }
+
         private PointF ScreenToWorld(int screenX, int screenY)
         {
             float worldX = (screenX - cameraOffsetX) / zoom;
@@ -115,7 +134,7 @@ namespace chemesry
         {
             isDeleteMode = true;
             selectedElementToPlace = null;
-            this.Text = "Режим удаления: кликните по атому, чтобы стереть его.";
+            this.Text = "Удаление: [ЛКМ] - один атом, [Ctrl+ЛКМ] - вся молекула.";
         }
 
         private void ElementButton_Click(object sender, EventArgs e)
@@ -128,67 +147,297 @@ namespace chemesry
             }
         }
 
+        // --- АЛГОРИТМ ПОИСКА ВСЕЙ МОЛЕКУЛЫ ПО СВЯЗЯМ ---
+        private List<VisualElement> GetFullMolecule(VisualElement startAtom)
+        {
+            List<VisualElement> molecule = new List<VisualElement>();
+            Queue<VisualElement> queue = new Queue<VisualElement>();
+            HashSet<VisualElement> visited = new HashSet<VisualElement>();
+
+            queue.Enqueue(startAtom);
+            visited.Add(startAtom);
+
+            while (queue.Count > 0)
+            {
+                VisualElement current = queue.Dequeue();
+                molecule.Add(current);
+
+                // Перебираем связи текущего атома
+                foreach (VisualElement neighbor in current.Bonds)
+                {
+                    if (!visited.Contains(neighbor))
+                    {
+                        visited.Add(neighbor);
+                        queue.Enqueue(neighbor);
+                    }
+                }
+            }
+            return molecule;
+        }
+
+        // --- СОХРАНЕНИЕ В ФАЙЛ (С УЧЕТОМ СВЯЗЕЙ) ---
+        private void SaveMoleculeToFile(List<VisualElement> moleculeToSave)
+        {
+            if (moleculeToSave.Count == 0) return;
+
+            float centerX = 0, centerY = 0;
+            foreach (var el in moleculeToSave)
+            {
+                centerX += el.X;
+                centerY += el.Y;
+            }
+            centerX /= moleculeToSave.Count;
+            centerY /= moleculeToSave.Count;
+
+            MoleculeSaveData data = new MoleculeSaveData();
+
+            // 1. Сохраняем сами атомы (их порядок в списке будет их ID)
+            foreach (var el in moleculeToSave)
+            {
+                data.Atoms.Add(new AtomSaveData
+                {
+                    ElementType = el.BaseElement.Name, // Убедитесь, что свойство называется Name
+                    OffsetX = el.X - centerX,
+                    OffsetY = el.Y - centerY
+                });
+            }
+
+            // 2. Сохраняем связи
+            for (int i = 0; i < moleculeToSave.Count; i++)
+            {
+                VisualElement atomA = moleculeToSave[i];
+
+                foreach (VisualElement atomB in atomA.Bonds)
+                {
+                    int j = moleculeToSave.IndexOf(atomB);
+
+                    // Сохраняем связь только один раз
+                    if (j > i)
+                    {
+                        data.Bonds.Add(new BondSaveData
+                        {
+                            AtomIndex1 = i,
+                            AtomIndex2 = j
+                        });
+                    }
+                }
+            }
+
+            SaveFileDialog saveFileDialog = new SaveFileDialog();
+            saveFileDialog.Filter = "Molecule files (*.mol)|*.mol";
+            saveFileDialog.Title = "Сохранить молекулу";
+
+            // Ставим физику на паузу, пока открыто диалоговое окно
+            int currentSpeed = speedMultiplier;
+            speedMultiplier = 0;
+
+            if (saveFileDialog.ShowDialog() == DialogResult.OK)
+            {
+                string jsonText = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(saveFileDialog.FileName, jsonText);
+                MessageBox.Show("Молекула успешно сохранена!");
+            }
+
+            // Возвращаем физику
+            speedMultiplier = currentSpeed;
+        }
+
+        // --- СОБЫТИЯ DRAG & DROP ДЛЯ ЗАГРУЗКИ ИЗ ФАЙЛА ---
+        private void Form1_DragEnter(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+                e.Effect = DragDropEffects.Copy;
+            else
+                e.Effect = DragDropEffects.None;
+        }
+
+        private void Form1_DragDrop(object sender, DragEventArgs e)
+        {
+            string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+
+            foreach (string file in files)
+            {
+                if (Path.GetExtension(file).ToLower() == ".mol")
+                {
+                    Point clientPoint = this.PointToClient(new Point(e.X, e.Y));
+                    PointF worldPos = ScreenToWorld(clientPoint.X, clientPoint.Y);
+                    LoadMoleculeFromFile(file, worldPos.X, worldPos.Y);
+                }
+            }
+        }
+
+        private void LoadMoleculeFromFile(string filePath, float worldX, float worldY)
+        {
+            try
+            {
+                string jsonText = File.ReadAllText(filePath);
+                MoleculeSaveData data = JsonSerializer.Deserialize<MoleculeSaveData>(jsonText);
+
+                List<VisualElement> spawnedAtoms = new List<VisualElement>();
+
+                // 1. Восстанавливаем атомы
+                foreach (var savedAtom in data.Atoms)
+                {
+                    if (VisualElemen.Database.ContainsKey(savedAtom.ElementType))
+                    {
+                        VisualElemen baseEl = VisualElemen.Database[savedAtom.ElementType];
+                        VisualElement newAtom = new VisualElement(baseEl, worldX + savedAtom.OffsetX, worldY + savedAtom.OffsetY);
+
+                        // Делаем их "взрослыми", чтобы физика не разорвала их при старте
+                        newAtom.FramesAlive = 61;
+
+                        spawnedAtoms.Add(newAtom);
+                        activeElements.Add(newAtom);
+                    }
+                    else
+                    {
+                        spawnedAtoms.Add(null); // Если тип не найден, ставим заглушку для сохранения порядка индексов
+                    }
+                }
+
+                // 2. Восстанавливаем связи
+                if (data.Bonds != null)
+                {
+                    foreach (var bond in data.Bonds)
+                    {
+                        if (bond.AtomIndex1 < spawnedAtoms.Count && bond.AtomIndex2 < spawnedAtoms.Count)
+                        {
+                            VisualElement a = spawnedAtoms[bond.AtomIndex1];
+                            VisualElement b = spawnedAtoms[bond.AtomIndex2];
+
+                            if (a != null && b != null && !a.Bonds.Contains(b))
+                            {
+                                a.Bonds.Add(b);
+                                b.Bonds.Add(a);
+                            }
+                        }
+                    }
+                }
+
+                MyValue = activeElements.Count;
+                this.Invalidate();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка чтения файла: " + ex.Message);
+            }
+        }
+
+
         private void Form1_MouseDown(object sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Right)
+            PointF worldPos = ScreenToWorld(e.X, e.Y);
+
+            // Клик средней кнопкой мыши или правой по пустому месту - движение камеры
+            if (e.Button == MouseButtons.Middle || (e.Button == MouseButtons.Right && ModifierKeys == Keys.Shift))
             {
                 isPanning = true;
                 lastMousePos = e.Location;
                 return;
             }
 
-            if (e.Button == MouseButtons.Left)
+            VisualElement clickedElement = null;
+            foreach (var el in activeElements)
             {
-                PointF worldPos = ScreenToWorld(e.X, e.Y);
-
-                VisualElement clickedElement = null;
-                foreach (var el in activeElements)
+                float dx = worldPos.X - el.X;
+                float dy = worldPos.Y - el.Y;
+                if (dx * dx + dy * dy <= el.Radius * el.Radius)
                 {
-                    float dx = worldPos.X - el.X;
-                    float dy = worldPos.Y - el.Y;
-                    if (dx * dx + dy * dy <= el.Radius * el.Radius)
+                    clickedElement = el;
+                    break;
+                }
+            }
+
+            // --- РЕЖИМ УДАЛЕНИЯ ---
+            // --- РЕЖИМ УДАЛЕНИЯ ---
+            if (e.Button == MouseButtons.Left && isDeleteMode && clickedElement != null)
+            {
+                // Проверяем, зажат ли Ctrl для удаления всей молекулы
+                if (ModifierKeys == Keys.Control)
+                {
+                    // УДАЛЕНИЕ ВСЕЙ МОЛЕКУЛЫ (Ctrl + Клик)
+                    List<VisualElement> moleculeToDelete = GetFullMolecule(clickedElement);
+                    foreach (var el in moleculeToDelete)
                     {
-                        clickedElement = el;
-                        break;
+                        foreach (var activeEl in activeElements) activeEl.Bonds.Remove(el);
+                        el.Bonds.Clear();
+                        activeElements.Remove(el);
                     }
                 }
-
-                // --- РЕЖИМ УДАЛЕНИЯ ---
-                if (isDeleteMode && clickedElement != null)
+                else
                 {
-                    foreach (var el in activeElements)
+                    // УДАЛЕНИЕ ПО ОДНОМУ АТОМУ (Простой клик)
+                    // Сначала удаляем ссылки на этот атом у соседей
+                    foreach (var neighbor in clickedElement.Bonds)
                     {
-                        el.Bonds.Remove(clickedElement);
+                        neighbor.Bonds.Remove(clickedElement);
                     }
-
-                    clickedElement.Bonds.Clear();
+                    // Затем удаляем сам атом
                     activeElements.Remove(clickedElement);
-
-                    if (draggedElement == clickedElement)
-                        draggedElement = null;
-
-                    MyValue = activeElements.Count;
-                    this.Invalidate();
-                    return;
                 }
 
-                // Захват атома
-                if (clickedElement != null)
+                if (draggedMolecule.Contains(clickedElement)) draggedMolecule.Clear();
+                if (draggedAtom == clickedElement) draggedAtom = null;
+
+                MyValue = activeElements.Count;
+                this.Invalidate();
+                return;
+            }
+
+            // --- ВЗАИМОДЕЙСТВИЕ С АТОМОМ (Захват / Сохранение) ---
+            if (clickedElement != null)
+            {
+                if (e.Button == MouseButtons.Left)
                 {
-                    draggedElement = clickedElement;
-                    draggedElement.VX = 0;
-                    draggedElement.VY = 0;
-                    return;
-                }
+                    // ЛОГИКА ДВОЙНОГО КЛИКА
+                    if (isDoubleClick)
+                    {
+                        // Это второй клик подряд! Берем всю молекулу
+                        isDragging = true;
+                        draggedMolecule = GetFullMolecule(clickedElement);
+                        draggedAtom = null;
 
-                // Спавн атома
-                if (selectedElementToPlace != null && VisualElemen.Database.ContainsKey(selectedElementToPlace))
-                {
-                    VisualElemen baseEl = VisualElemen.Database[selectedElementToPlace];
-                    activeElements.Add(new VisualElement(baseEl, worldPos.X, worldPos.Y));
-                    MyValue = activeElements.Count;
-                    this.Invalidate();
+                        foreach (var atom in draggedMolecule)
+                        {
+                            atom.VX = 0;
+                            atom.VY = 0;
+                        }
+
+                        isDoubleClick = false;
+                        doubleClickTimer.Stop();
+                    }
+                    else
+                    {
+                        // Это первый клик. Берем один атом
+                        isDragging = true;
+                        draggedMolecule.Clear();
+                        draggedAtom = clickedElement;
+                        draggedAtom.VX = 0;
+                        draggedAtom.VY = 0;
+
+                        // Запускаем таймер ожидания второго клика
+                        isDoubleClick = true;
+                        doubleClickTimer.Start();
+                    }
+
+                    lastMousePos = e.Location;
                 }
+                else if (e.Button == MouseButtons.Right)
+                {
+                    // ПКМ по атому сохраняет всю молекулу
+                    List<VisualElement> molecule = GetFullMolecule(clickedElement);
+                    SaveMoleculeToFile(molecule);
+                }
+                return;
+            }
+
+            // Спавн нового атома
+            if (e.Button == MouseButtons.Left && selectedElementToPlace != null && VisualElemen.Database.ContainsKey(selectedElementToPlace))
+            {
+                VisualElemen baseEl = VisualElemen.Database[selectedElementToPlace];
+                activeElements.Add(new VisualElement(baseEl, worldPos.X, worldPos.Y));
+                MyValue = activeElements.Count;
+                this.Invalidate();
             }
         }
 
@@ -201,19 +450,46 @@ namespace chemesry
                 lastMousePos = e.Location;
                 this.Invalidate();
             }
-            else if (draggedElement != null)
+            else if (isDragging)
             {
-                PointF worldPos = ScreenToWorld(e.X, e.Y);
-                draggedElement.X = worldPos.X;
-                draggedElement.Y = worldPos.Y;
+                float deltaX = (e.X - lastMousePos.X) / zoom;
+                float deltaY = (e.Y - lastMousePos.Y) / zoom;
+
+                if (draggedMolecule.Count > 0)
+                {
+                    // Тащим всю молекулу (Двойной клик)
+                    foreach (var atom in draggedMolecule)
+                    {
+                        atom.X += deltaX;
+                        atom.Y += deltaY;
+                        atom.VX = 0;
+                        atom.VY = 0;
+                    }
+                }
+                else if (draggedAtom != null)
+                {
+                    // Тащим один атом (Одинарный клик)
+                    draggedAtom.X += deltaX;
+                    draggedAtom.Y += deltaY;
+                    draggedAtom.VX = 0;
+                    draggedAtom.VY = 0;
+                }
+
+                lastMousePos = e.Location;
                 this.Invalidate();
             }
         }
 
         private void Form1_MouseUp(object sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Right) isPanning = false;
-            if (e.Button == MouseButtons.Left) draggedElement = null;
+            isPanning = false;
+
+            if (e.Button == MouseButtons.Left)
+            {
+                isDragging = false;
+                draggedMolecule.Clear();
+                draggedAtom = null;
+            }
         }
 
         private void Form1_MouseWheel(object sender, MouseEventArgs e)
@@ -264,9 +540,10 @@ namespace chemesry
                 {
                     foreach (var el in activeElements)
                     {
-
-                        if (isDragging && el.Equals(selectedElement))
+                        // Игнорируем физику для перетаскиваемых атомов
+                        if (isDragging && (draggedMolecule.Contains(el) || el == draggedAtom))
                             continue;
+
                         el.FramesAlive++;
 
                         if (el.FramesAlive > 60)
@@ -342,7 +619,7 @@ namespace chemesry
                 for (int i = 0; i < activeElements.Count; i++)
                 {
                     VisualElement a = activeElements[i];
-                    spatialGrid.GetNearby(a, nearbyBuffer); // Используем буфер без лишней памяти
+                    spatialGrid.GetNearby(a, nearbyBuffer);
 
                     foreach (var b in nearbyBuffer)
                     {
@@ -409,14 +686,13 @@ namespace chemesry
             float viewRight = viewLeft + (this.ClientSize.Width / zoom);
             float viewBottom = viewTop + (this.ClientSize.Height / zoom);
 
-            // ИСПРАВЛЕНИЕ: Отрисовка линий химических связей
+            // Отрисовка линий химических связей
             using (Pen bondPen = new Pen(Color.DarkGray, 4f))
             {
                 foreach (var el in activeElements)
                 {
                     foreach (var bonded in el.Bonds)
                     {
-                        // Рисуем одну связь только один раз
                         if (activeElements.IndexOf(el) < activeElements.IndexOf(bonded))
                         {
                             e.Graphics.DrawLine(bondPen, el.X, el.Y, bonded.X, bonded.Y);
@@ -438,10 +714,7 @@ namespace chemesry
 
         private void Form1_Load(object sender, EventArgs e) { }
 
-        private void label2_Click(object sender, EventArgs e)
-        {
-
-        }
+        private void label2_Click(object sender, EventArgs e) { }
     }
 
     public class SpatialGrid
@@ -467,7 +740,6 @@ namespace chemesry
             list.Add(el);
         }
 
-        // Оптимизированный метод без создания лишних new List()
         public void GetNearby(VisualElement el, List<VisualElement> resultBuffer)
         {
             resultBuffer.Clear();
@@ -486,5 +758,24 @@ namespace chemesry
         }
 
         private (int, int) GetCell(float x, float y) => ((int)(x / cellSize), (int)(y / cellSize));
+    }
+
+    public class AtomSaveData
+    {
+        public string ElementType { get; set; }
+        public float OffsetX { get; set; }
+        public float OffsetY { get; set; }
+    }
+
+    public class BondSaveData
+    {
+        public int AtomIndex1 { get; set; }
+        public int AtomIndex2 { get; set; }
+    }
+
+    public class MoleculeSaveData
+    {
+        public List<AtomSaveData> Atoms { get; set; } = new List<AtomSaveData>();
+        public List<BondSaveData> Bonds { get; set; } = new List<BondSaveData>();
     }
 }
